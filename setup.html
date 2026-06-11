@@ -62,10 +62,9 @@ td code{font-family:'Courier New',monospace;font-size:11px;background:#f0f4f8;pa
   <h2>Stap 2 — Overzicht aan te maken lijsten</h2>
   <p style="font-size:12px;color:#5a6070;margin-bottom:10px">Per school worden 3 lijsten aangemaakt (Veiligheid, Welzijn, Incidenten) + 1 centrale Beheerders-lijst. Totaal: <strong>10 lijsten</strong>.</p>
   <div class="grid">
-    <div class="sk"><div class="sk-n">Het Kiezeltje</div><div class="sk-s">Sleutel: csl</div></div>
-    <div class="sk"><div class="sk-n">De Kei</div><div class="sk-s">Sleutel: css</div></div>
-    <div class="sk"><div class="sk-n">'t Mulderke</div><div class="sk-s">Sleutel: ko</div></div>
-    <div class="sk"><div class="sk-n">—</div><div class="sk-s">Sleutel: te</div></div>
+    <div class="sk"><div class="sk-n">Het Kiezeltje</div><div class="sk-s">Sleutel: hk</div></div>
+    <div class="sk"><div class="sk-n">De Kei</div><div class="sk-s">Sleutel: dk</div></div>
+    <div class="sk"><div class="sk-n">'t Mulderke</div><div class="sk-s">Sleutel: tm</div></div>
   </div>
 </div>
 
@@ -73,6 +72,7 @@ td code{font-family:'Courier New',monospace;font-size:11px;background:#f0f4f8;pa
   <h2>Stap 3 — Lijsten aanmaken</h2>
   <div class="info-box">Na uitvoering verschijnen de List IDs hieronder. Kopieer ze naar <code>index.html</code> en <code>beheer.html</code>.</div>
   <button class="btn btn-g" id="btn-setup" onclick="runSetup()">▶ SharePoint-lijsten aanmaken</button>
+    <button class="btn btn-p" style="margin-left:8px" onclick="toonBestaandeIDs()">🔍 Toon bestaande List IDs</button>
   <div class="log" id="log" style="display:none"></div>
 </div>
 
@@ -234,6 +234,51 @@ async function runSetup() {
     tbody.appendChild(tr);
   }
   btn.textContent = '✅ Setup voltooid';
+}
+
+async function toonBestaandeIDs() {
+  log('=== Bestaande lijsten ophalen ===', 'info');
+  document.getElementById('log').style.display = 'block';
+  document.getElementById('id-card').style.display = 'block';
+  const tbody = document.getElementById('id-table');
+  tbody.innerHTML = '';
+
+  const lijstNamen = [
+    'KA-Veiligheid-hk','KA-Welzijn-hk','KA-Incidenten-hk',
+    'KA-Veiligheid-dk','KA-Welzijn-dk','KA-Incidenten-dk',
+    'KA-Veiligheid-tm','KA-Welzijn-tm','KA-Incidenten-tm',
+    'KA-Beheerders',
+  ];
+
+  try {
+    const r = await fetch(`https://graph.microsoft.com/v1.0/sites/${CFG.siteId}/lists?$top=50`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await r.json();
+    const gevonden = data.value.filter(l => lijstNamen.includes(l.displayName));
+
+    gevonden.sort((a,b) => lijstNamen.indexOf(a.displayName) - lijstNamen.indexOf(b.displayName));
+
+    gevonden.forEach(lijst => {
+      const key = lijst.displayName
+        .replace('KA-Veiligheid-','veiligheid_')
+        .replace('KA-Welzijn-','welzijn_')
+        .replace('KA-Incidenten-','incidenten_')
+        .replace('KA-Beheerders','beheerders');
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td><code>${lijst.displayName}</code></td><td><code id="id-${key}">${lijst.id}</code></td><td><button class="copy-btn" onclick="kopeer('${key}')">Kopieer</button></td>`;
+      tbody.appendChild(tr);
+      log(`✅ ${lijst.displayName}: ${lijst.id.substring(0,8)}…`, 'ok');
+    });
+
+    if (gevonden.length === 0) {
+      log('Geen KA-lijsten gevonden op deze site.', 'err');
+    } else {
+      log(`${gevonden.length} lijsten gevonden.`, 'ok');
+    }
+  } catch(e) {
+    log('Fout bij ophalen: ' + e.message, 'err');
+  }
 }
 
 function kopeer(key) {
