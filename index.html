@@ -416,7 +416,7 @@ tr:last-child td{border-bottom:none}tr:hover td{background:var(--blauw-bg)}
 const CFG = {
   clientId: '4e41368c-ff81-4ffb-b1f8-e9a1e46704c5',
   tenantId: '165074eb-b8b7-49e8-a9b4-54cac7939ed2',
-  redirectUri: 'https://lon-ka.github.io/KA-Meldpunt-2026/',
+  redirectUri: 'https://lon-ka.github.io/KA-Meldpunt/',
   siteId: 'gebaskabe.sharepoint.com,78590f95-305f-4206-a4d1-c142b7fdf028,e0158228-22a6-4225-87dc-fe7d619ae7e4',
   lists: {
     veiligheid_csl: '90fc919d-84bd-4f45-8706-1a0a7815b06c', veiligheid_css: 'db607478-fa64-414a-ab68-5097ae85b9d2', veiligheid_ko: '89e1e4c7-2421-4f9b-b287-f2493d779e81', veiligheid_te: 'de860ee3-e497-4c66-903d-9018b91345bd',
@@ -429,10 +429,10 @@ const CFG = {
     { sleutel:'dk', naam:'De Kei' },
     { sleutel:'tm', naam:"'t Mulderke" },
   ],
-  beheerUrl: 'https://lon-ka.github.io/KA-Meldpunt-2026/beheer.html',
+  beheerUrl: 'https://lon-ka.github.io/KA-Meldpunt/beheer.html',
   org: 'KA-Meldpunt',
   ritaEmail: 'secretariaatlonka@centrumschool.londerzeel.be',
-  beheerUrl: 'https://lon-ka.github.io/KA-Meldpunt-2026/beheer.html',
+  beheerUrl: 'https://lon-ka.github.io/KA-Meldpunt/beheer.html',
   org: 'KA-Meldpunt',
   ritaEmail: 'secretariaatlonka@centrumschool.londerzeel.be',
   directieEmails: {
@@ -671,7 +671,7 @@ async function doSubmit(prefix, pijler) {
       var vpData = await graphGet('/sites/' + CFG.siteId + '/lists/' + CFG.lists.beheerders + '/items?$expand=fields&$top=100');
       var vpItem = vpData.value.find(function(i){ return i.fields.Rol === 'vertrouwenspersoon' && (i.fields.School === school || !i.fields.School) && i.fields.Actief !== false; });
       if (vpItem && vpItem.fields.Email) {
-        var vpBody = '[VERTROUWELIJK] Nieuwe welzijnsmelding ingediend via KA-Meldpunt.\n\nReferentie: ' + ref + '\nSchool: ' + schoolNaam(school) + '\nDatum: ' + now.toLocaleDateString('nl-BE') + '\n\nRaadpleeg het beheerspaneel voor de details:\nhttps://lon-ka.github.io/KA-Meldpunt-2026/beheer.html\n\nDit bericht is strikt vertrouwelijk.';
+        var vpBody = '[VERTROUWELIJK] Nieuwe welzijnsmelding ingediend via KA-Meldpunt.\n\nReferentie: ' + ref + '\nSchool: ' + schoolNaam(school) + '\nDatum: ' + now.toLocaleDateString('nl-BE') + '\n\nRaadpleeg het beheerspaneel voor de details:\nhttps://lon-ka.github.io/KA-Meldpunt/beheer.html\n\nDit bericht is strikt vertrouwelijk.';
         await graphPost('/me/sendMail', { message:{ subject:'[Vertrouwelijk] Nieuwe welzijnsmelding — ' + schoolNaam(school), body:{contentType:'Text',content:vpBody}, toRecipients:[{emailAddress:{address:vpItem.fields.Email}}] }, saveToSentItems:false });
       }
     } catch(e) { console.error('VP e-mail fout:', e.message); }
