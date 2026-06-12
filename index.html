@@ -162,6 +162,45 @@ if (window.self === window.top) {
     });
 }
 </script>
+<script>
+if (window.self === window.top) {
+  document.addEventListener('DOMContentLoaded', function() {
+    document.body.innerHTML = `
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;
+                  height:100vh;font-family:'Segoe UI',sans-serif;background:#F5F7FA;text-align:center;padding:20px;">
+        <svg width="64" height="64" viewBox="0 0 64 64" fill="none" style="margin-bottom:24px;">
+          <rect width="64" height="64" rx="16" fill="#0F1D2E"/>
+          <rect x="12" y="12" width="16" height="16" rx="4" fill="#1A6BB5"/>
+          <rect x="36" y="12" width="16" height="16" rx="4" fill="#2E8B57"/>
+          <rect x="12" y="36" width="16" height="16" rx="4" fill="#C05A1A"/>
+          <rect x="36" y="36" width="16" height="16" rx="4" fill="#6B7A8D"/>
+        </svg>
+        <h2 style="margin:0 0 8px;font-size:1.4rem;color:#1C2B3A;">Toegang via portaal vereist</h2>
+        <p style="margin:0 0 28px;color:#6B7A8D;max-width:360px;line-height:1.5;">
+          Deze applicatie is enkel beschikbaar via het MijnDigiKAntoor portaal.
+        </p>
+        <a href="https://lon-ka.github.io/KA-portaal/"
+           style="display:inline-flex;align-items:center;gap:10px;padding:14px 28px;
+                  background:#0F1D2E;color:#fff;text-decoration:none;border-radius:10px;font-weight:600;">
+          Naar MijnDigiKAntoor
+        </a>
+      </div>`;
+  });
+}
+</script>
+<script>
+window._portalToken = null;
+window._portalEmail = '';
+window._appBooted = false;
+window.addEventListener('message', function(event) {
+  if (event.origin !== 'https://lon-ka.github.io') return;
+  if (!event.data || event.data.type !== 'MSAL_TOKEN') return;
+  if (window._portalToken) return;
+  window._portalToken = event.data.token;
+  window._portalEmail = event.data.email || '';
+  if (!window._appBooted) boot();
+});
+</script>
 </head>
 <body>
 
@@ -446,7 +485,7 @@ if (window.self === window.top) {
 </div>
 </div>
 <script>
-const CFG = {
+const CONFIG = {
   clientId: 'b427a5ba-542f-4254-8ca0-5fa41b1d130a',
   tenantId: '165074eb-b8b7-49e8-a9b4-54cac7939ed2',
   redirectUri: 'https://lon-ka.github.io/KA-Meldpunt/',
@@ -475,25 +514,34 @@ const CFG = {
   },
 };
 
-const msalCfg = { auth:{ clientId:CFG.clientId, authority:`https://login.microsoftonline.com/${CFG.tenantId}`, redirectUri:CFG.redirectUri }, cache:{ cacheLocation:'localStorage' } };
-const msalClient = new msal.PublicClientApplication(msalCfg);
+const msalApp = new msal.PublicClientApplication({
+  auth: { clientId: CONFIG.clientId, authority: `https://login.microsoftonline.com/${CONFIG.tenantId}`, redirectUri: CONFIG.redirectUri },
+  cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: false }
+});
+const SCOPES = ['User.Read', 'Sites.ReadWrite.All', 'Mail.Send'];
+let token = null, huidigUser = null, huidigSchool = 'csl', huidigPijler = null;
 let token = null, huidigUser = null, huidigSchool = 'csl', huidigPijler = null;
 let gCounts={}, fCounts={};
 const FN={'fao':['Medisch attest.pdf','Foto letsel.jpg','Getuigenverklaring.pdf'],'flo':['Foto letsel.jpg','Medisch verslag.pdf'],'fri':['Foto risico.jpg'],'fag':['Foto incident.jpg','PV politie.pdf']};
 
-async function login() {
-  await msalClient.initialize();
-  const resp = await msalClient.handleRedirectPromise();
-  if (resp) { token = resp.accessToken; initApp(resp.account); return; }
-  const accs = msalClient.getAllAccounts();
-  if (accs.length) {
-    try {
-      const t = await msalClient.acquireTokenSilent({ scopes:['Sites.ReadWrite.All','Mail.Send'], account:accs[0] });
-      token = t.accessToken; initApp(accs[0]); return;
-    } catch(e) {}
+async function getToken() {
+  if (window._portalToken) return window._portalToken;
+  const accounts = msalApp.getAllAccounts();
+  if (!accounts.length) return null;
+  try {
+    const r = await msalApp.acquireTokenSilent({ scopes: SCOPES, account: accounts[0] });
+    return r.accessToken;
+  } catch(e) {
+    if (window.self !== window.top) { showError('Sessie verlopen. Meld opnieuw aan via het portaal.'); return null; }
+    await msalApp.acquireTokenRedirect({ scopes: SCOPES, account: accounts[0] });
+    return null;
   }
-  if(window.self !== window.top){ document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;text-align:center;padding:20px;"><div><p style="font-size:1rem;color:#333;">Sessie verlopen.</p><p style="font-size:.85rem;color:#666;">Meld opnieuw aan via het MijnDigiKAntoor portaal.</p></div></div>'; return; }
-    await msalClient.loginRedirect({ scopes:['Sites.ReadWrite.All','Mail.Send'] });
+}
+
+async function login() {
+  if (window.self !== window.top) { showError('Sessie verlopen. Meld opnieuw aan via het portaal.'); return; }
+  try { await msalApp.loginRedirect({ scopes: SCOPES }); }
+  catch(e) { showError('Aanmelden mislukt: ' + e.message); }
 }
 
 function initApp(acc) {
@@ -512,8 +560,26 @@ function initApp(acc) {
   if (ad) ad.value = new Date().toISOString().slice(0,10);
 }
 
-function logout() { msalClient.logout(); }
-function schoolNaam(s) { const x=CFG.scholen.find(c=>c.sleutel===s); return x?x.naam:s; }
+async function logout() { await msalApp.logoutRedirect({ postLogoutRedirectUri: CONFIG.redirectUri }); }
+function showError(msg) {
+  console.error('KA-Meldpunt:', msg);
+  // Toon fout als overlay boodschap
+  const existing = document.getElementById('meldpunt-error-msg');
+  if (existing) { existing.textContent = msg; existing.style.display = 'flex'; return; }
+  const div = document.createElement('div');
+  div.id = 'meldpunt-error-msg';
+  div.style.cssText = 'display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;text-align:center;padding:20px;flex-direction:column;';
+  div.innerHTML = '<p style="font-size:1rem;color:#c0392b;font-weight:600;">' + msg + '</p>';
+  document.body.insertBefore(div, document.body.firstChild);
+}
+
+function showView(v) {
+  // Mapping naar KA-Meldpunt's eigen show() functie
+  if (v === 'login') { document.getElementById('login-wrap').style.display = 'flex'; document.getElementById('app').style.display = 'none'; }
+  else if (v === 'app') { document.getElementById('login-wrap').style.display = 'none'; document.getElementById('app').style.display = 'flex'; }
+}
+
+function schoolNaam(s) { const x=CONFIG.scholen.find(c=>c.sleutel===s); return x?x.naam:s; }
 function changeSchool(s) { huidigSchool=s; document.getElementById('i-school').textContent=schoolNaam(s); }
 
 function show(s) {
@@ -605,7 +671,7 @@ async function uploadBijlagen(containerId, ref, school) {
     try {
       // Maak upload sessie aan
       var sessieResp = await fetch(
-        'https://graph.microsoft.com/v1.0/sites/' + CFG.siteId + '/drive/root:/' + folderPath + '/' + file.name + ':/createUploadSession',
+        'https://graph.microsoft.com/v1.0/sites/' + CONFIG.siteId + '/drive/root:/' + folderPath + '/' + file.name + ':/createUploadSession',
         { method:'POST', headers:{ 'Authorization':'Bearer ' + token, 'Content-Type':'application/json' },
           body: JSON.stringify({ item:{ '@microsoft.graph.conflictBehavior':'rename' } }) }
       );
@@ -670,7 +736,7 @@ const PREFIXES={AO:'AO',EH:'EH',LO:'LO',RI:'RI',WE:'WE',AG:'AG',ES:'ES'};
 async function doSubmit(prefix, pijler) {
   var school = (document.getElementById('school-form') || {}).value || huidigSchool;
   var listType = pijler==='w' ? 'welzijn' : pijler==='i' ? 'incidenten' : 'veiligheid';
-  var listId = CFG.lists[listType + '_' + school];
+  var listId = CONFIG.lists[listType + '_' + school];
   var now = new Date();
   var pfxMap = {AO:'AO',EH:'EH',LO:'LO',RI:'RI',WE:'WE',AG:'AG',ES:'ES'};
   var ref = (pfxMap[prefix]||'ME') + '-' + now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(Math.floor(Math.random()*90)+10);
@@ -688,7 +754,7 @@ async function doSubmit(prefix, pijler) {
     try {
       var naam = (document.getElementById('ao-naam') || {}).value || (huidigUser && huidigUser.name) || 'onbekend';
       var omschr = (document.getElementById('ao-omschr') || {}).value || '—';
-      await graphPost('/sites/' + CFG.siteId + '/lists/' + listId + '/items', {
+      await graphPost('/sites/' + CONFIG.siteId + '/lists/' + listId + '/items', {
         fields: { Title:ref, TypeMelding:prefix, School:school, Naam:naam,
           Omschrijving:omschr, Status:'In behandeling',
           Bijlagen: uploadedFiles.length > 0 ? uploadedFiles.join(', ') : '',
@@ -697,12 +763,12 @@ async function doSubmit(prefix, pijler) {
     } catch(e) { console.error('SharePoint fout:', e.message); }
   }
 
-  var directieEmail = CFG.directieEmails[school];
+  var directieEmail = CONFIG.directieEmails[school];
 
   // 2a. Welzijn: stuur naar vertrouwenspersoon van de school
-  if (prefix === 'WE' && CFG.lists.beheerders && CFG.lists.beheerders !== 'PLACEHOLDER') {
+  if (prefix === 'WE' && CONFIG.lists.beheerders && CONFIG.lists.beheerders !== 'PLACEHOLDER') {
     try {
-      var vpData = await graphGet('/sites/' + CFG.siteId + '/lists/' + CFG.lists.beheerders + '/items?$expand=fields&$top=100');
+      var vpData = await graphGet('/sites/' + CONFIG.siteId + '/lists/' + CONFIG.lists.beheerders + '/items?$expand=fields&$top=100');
       var vpItem = vpData.value.find(function(i){ return i.fields.Rol === 'vertrouwenspersoon' && (i.fields.School === school || !i.fields.School || i.fields.School === 'alle') && i.fields.Actief !== false; });
       if (vpItem && vpItem.fields.Email) {
         var vpBody = '[VERTROUWELIJK] Nieuwe welzijnsmelding ingediend via KA-Meldpunt.\n\nReferentie: ' + ref + '\nSchool: ' + schoolNaam(school) + '\nDatum: ' + now.toLocaleDateString('nl-BE') + '\n\nRaadpleeg het beheerspaneel voor de details:\nhttps://lon-ka.github.io/KA-Meldpunt/beheer.html\n\nDit bericht is strikt vertrouwelijk.';
@@ -759,9 +825,9 @@ async function laadMijn() {
   const items = [];
   for (const type of ['veiligheid','welzijn','incidenten']) {
     const key = `${type}_${school}`;
-    if (!CFG.lists[key]||CFG.lists[key]==='PLACEHOLDER') continue;
+    if (!CONFIG.lists[key]||CONFIG.lists[key]==='PLACEHOLDER') continue;
     try {
-      const r = await graphGet(`/sites/${CFG.siteId}/lists/${CFG.lists[key]}/items?$expand=fields&$top=100`);
+      const r = await graphGet(`/sites/${CONFIG.siteId}/lists/${CONFIG.lists[key]}/items?$expand=fields&$top=100`);
       r.value.filter(i=>i.fields.IngediendDoor?.toLowerCase()===email).forEach(i=>items.push({...i.fields,_type:type}));
     } catch(e) {}
   }
@@ -780,9 +846,9 @@ async function laadVeiligheid() {
   const tbody = document.getElementById('v-tabel');
   tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">Laden…</td></tr>';
   const key = `veiligheid_${school}`;
-  if (!CFG.lists[key]||CFG.lists[key]==='PLACEHOLDER') { tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">List ID nog niet ingevuld — setup.html uitvoeren</td></tr>'; return; }
+  if (!CONFIG.lists[key]||CONFIG.lists[key]==='PLACEHOLDER') { tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">List ID nog niet ingevuld — setup.html uitvoeren</td></tr>'; return; }
   try {
-    const r = await graphGet(`/sites/${CFG.siteId}/lists/${CFG.lists[key]}/items?$expand=fields&$top=100`);
+    const r = await graphGet(`/sites/${CONFIG.siteId}/lists/${CONFIG.lists[key]}/items?$expand=fields&$top=100`);
     tbody.innerHTML = r.value.length ? r.value.map(i=>`<tr>
       <td class="cl">${i.fields.Title||'—'}</td><td>${i.fields.Naam||'—'}</td><td>${i.fields.TypeMelding||'—'}</td>
       <td>${schoolNaam(school)}</td>
@@ -795,9 +861,9 @@ async function laadWelzijn() {
   const school = huidigSchool;
   const tbody = document.getElementById('w-tabel');
   const key = `welzijn_${school}`;
-  if (!CFG.lists[key]||CFG.lists[key]==='PLACEHOLDER') { tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">List ID nog niet ingevuld</td></tr>'; return; }
+  if (!CONFIG.lists[key]||CONFIG.lists[key]==='PLACEHOLDER') { tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">List ID nog niet ingevuld</td></tr>'; return; }
   try {
-    const r = await graphGet(`/sites/${CFG.siteId}/lists/${CFG.lists[key]}/items?$expand=fields&$top=100`);
+    const r = await graphGet(`/sites/${CONFIG.siteId}/lists/${CONFIG.lists[key]}/items?$expand=fields&$top=100`);
     tbody.innerHTML = r.value.length ? r.value.map(i=>`<tr>
       <td class="cl">${i.fields.Title||'—'}</td><td>${i.fields.TypeMelding||'—'}</td>
       <td>${schoolNaam(school)}</td><td>${i.fields.Toegewezen||'—'}</td>
@@ -810,9 +876,9 @@ async function laadIncidenten() {
   const school = huidigSchool;
   const tbody = document.getElementById('i-tabel');
   const key = `incidenten_${school}`;
-  if (!CFG.lists[key]||CFG.lists[key]==='PLACEHOLDER') { tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">List ID nog niet ingevuld</td></tr>'; return; }
+  if (!CONFIG.lists[key]||CONFIG.lists[key]==='PLACEHOLDER') { tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">List ID nog niet ingevuld</td></tr>'; return; }
   try {
-    const r = await graphGet(`/sites/${CFG.siteId}/lists/${CFG.lists[key]}/items?$expand=fields&$top=100`);
+    const r = await graphGet(`/sites/${CONFIG.siteId}/lists/${CONFIG.lists[key]}/items?$expand=fields&$top=100`);
     tbody.innerHTML = r.value.length ? r.value.map(i=>`<tr>
       <td class="cl">${i.fields.Title||'—'}</td>
       <td>${i.fields.Omschrijving?.substring(0,30)||'—'}</td>
@@ -823,25 +889,33 @@ async function laadIncidenten() {
   } catch(e) { tbody.innerHTML=`<tr><td colspan="5" style="text-align:center;color:var(--red);padding:20px">Fout bij laden: ${e.message}</td></tr>`; }
 }
 
-window.addEventListener('load', async () => {
-  await msalClient.initialize();
-  const resp = await msalClient.handleRedirectPromise();
-  if (resp) { token = resp.accessToken; initApp(resp.account); return; }
-  
-  const accs = msalClient.getAllAccounts();
-  if (!accs.length) {
-    if (window.self !== window.top) { document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;text-align:center;padding:20px;"><div><p style="font-size:1rem;color:#333;">Sessie verlopen.</p><p style="font-size:.85rem;color:#666;">Meld opnieuw aan via het MijnDigiKAntoor portaal.</p></div></div>'; return; }
-    document.getElementById('login-wrap').style.display = 'flex';
-    return;
-  }
+async function boot() {
   try {
-    const t = await msalClient.acquireTokenSilent({ scopes:['Sites.ReadWrite.All','Mail.Send'], account:accs[0] });
-    token = t.accessToken; initApp(accs[0]);
+    await msalApp.initialize();
+    const resp = await msalApp.handleRedirectPromise();
+    if (resp) { token = resp.accessToken; initApp(resp.account); window._appBooted = true; return; }
+
+    if (window._portalToken) { token = window._portalToken; initApp({ username: window._portalEmail || '' }); window._appBooted = true; return; }
+
+    const accs = msalApp.getAllAccounts();
+    if (!accs.length) {
+      if (window.self !== window.top) { showError('Geen sessie gevonden. Meld aan via het MijnDigiKAntoor portaal.'); return; }
+      showView('login');
+      return;
+    }
+    try {
+      const t = await msalApp.acquireTokenSilent({ scopes: SCOPES, account: accs[0] });
+      token = t.accessToken; initApp(accs[0]); window._appBooted = true;
+    } catch(e) {
+      if (window.self !== window.top) { showError('Sessie verlopen. Meld opnieuw aan via het portaal.'); return; }
+      showView('login');
+    }
   } catch(e) {
-    if (window.self !== window.top) { document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;text-align:center;padding:20px;"><div><p style="font-size:1rem;color:#333;">Sessie verlopen.</p><p style="font-size:.85rem;color:#666;">Meld opnieuw aan via het MijnDigiKAntoor portaal.</p></div></div>'; return; }
-    else { document.getElementById('login-wrap').style.display = 'flex'; }
+    showError('Initialisatie mislukt: ' + e.message);
   }
-});
+}
+
+window.addEventListener('load', () => boot());
 </script>
 </body>
 </html>
