@@ -826,19 +826,20 @@ async function laadIncidenten() {
 window.addEventListener('load', async () => {
   await msalClient.initialize();
   const resp = await msalClient.handleRedirectPromise();
-  if (resp) { token = resp.accessToken; initApp(resp.account); }
-  else {
-    const accs = msalClient.getAllAccounts();
-    if (accs.length) {
-      try {
-        const t = await msalClient.acquireTokenSilent({ scopes:['Sites.ReadWrite.All','Mail.Send'], account:accs[0] });
-        token = t.accessToken; initApp(accs[0]);
-      } catch(e) {
-        if(window.self !== window.top) { document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;text-align:center;padding:20px;"><div><p style="font-size:1rem;color:#333;">Sessie verlopen.</p><p style="font-size:.85rem;color:#666;">Meld opnieuw aan via het MijnDigiKAntoor portaal.</p></div></div>'; return; }
-      }
-    } else {
-      if(window.self === window.top) { document.getElementById('login-wrap').style.display = 'flex'; }
-    }
+  if (resp) { token = resp.accessToken; initApp(resp.account); return; }
+  
+  const accs = msalClient.getAllAccounts();
+  if (!accs.length) {
+    if (window.self !== window.top) { document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;text-align:center;padding:20px;"><div><p style="font-size:1rem;color:#333;">Sessie verlopen.</p><p style="font-size:.85rem;color:#666;">Meld opnieuw aan via het MijnDigiKAntoor portaal.</p></div></div>'; return; }
+    document.getElementById('login-wrap').style.display = 'flex';
+    return;
+  }
+  try {
+    const t = await msalClient.acquireTokenSilent({ scopes:['Sites.ReadWrite.All','Mail.Send'], account:accs[0] });
+    token = t.accessToken; initApp(accs[0]);
+  } catch(e) {
+    if (window.self !== window.top) { document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;text-align:center;padding:20px;"><div><p style="font-size:1rem;color:#333;">Sessie verlopen.</p><p style="font-size:.85rem;color:#666;">Meld opnieuw aan via het MijnDigiKAntoor portaal.</p></div></div>'; return; }
+    else { document.getElementById('login-wrap').style.display = 'flex'; }
   }
 });
 </script>
