@@ -447,13 +447,17 @@ async function initApp(acc) {
   document.getElementById('b-av').textContent = avText;
 
   // Beperk schoolfilter als directie van 1 school
-  if (['directie','zorg','secretariaat','vertrouwenspersoon'].includes(huidigeBeheerder.rol) && huidigeBeheerder.school && huidigeBeheerder.school !== 'alle') {
+  if (['directie','zorg','secretariaat','vertrouwenspersoon','preventieadviseur'].includes(huidigeBeheerder.rol) && huidigeBeheerder.school && huidigeBeheerder.school !== 'alle') {
     const sf = document.getElementById('school-filter');
     sf.value = huidigeBeheerder.school; sf.disabled = true;
     huidigSchool = huidigeBeheerder.school;
   }
   // Verberg welzijn voor niet-geautoriseerden
   if (!['admin','vertrouwenspersoon'].includes(huidigeBeheerder.rol)) {
+    document.getElementById('nav-welzijn').style.display='none';
+  }
+  // Preventieadviseur: enkel veiligheid en incidenten zichtbaar, geen welzijn
+  if (huidigeBeheerder.rol === 'preventieadviseur') {
     document.getElementById('nav-welzijn').style.display='none';
   }
   // AGODI actiekolom: enkel voor admin en staf
