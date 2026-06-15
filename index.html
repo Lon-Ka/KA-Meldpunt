@@ -129,6 +129,19 @@ tr:last-child td{border-bottom:none}tr:hover td{background:var(--blauw-bg)}
 .login-s{font-size:12px;color:var(--muted);margin-bottom:20px;line-height:1.5}
 .login-scholen{font-size:11px;color:#aab;margin-bottom:16px;line-height:1.6}
 </style>
+<script>
+window._portalToken = null;
+window._portalEmail = '';
+window._appBooted = false;
+window.addEventListener('message', function(event) {
+  if (event.origin !== 'https://lon-ka.github.io') return;
+  if (!event.data || event.data.type !== 'MSAL_TOKEN') return;
+  if (window._portalToken) return;
+  window._portalToken = event.data.token;
+  window._portalEmail = event.data.email || '';
+  if (!window._appBooted) boot();
+});
+</script>
 </head>
 <body>
 
@@ -459,6 +472,21 @@ async function login() {
       token = t.accessToken; initApp(accs[0]); return;
     } catch(e) {}
   }
+  // In iframe: wacht op portal token ipv redirect
+  if (window.self !== window.top) {
+    if (window._portalToken) {
+      token = window._portalToken;
+      initApp({ username: window._portalEmail || '', name: window._portalEmail || '' });
+      return;
+    }
+    await new Promise(r => setTimeout(r, 2000));
+    if (window._portalToken) {
+      token = window._portalToken;
+      initApp({ username: window._portalEmail || '', name: window._portalEmail || '' });
+      return;
+    }
+    return; // Geen redirect vanuit iframe
+  }
   await msalClient.loginRedirect({ scopes:['Sites.ReadWrite.All','Mail.Send'] });
 }
 
@@ -611,12 +639,14 @@ function addG(id) {
 function addF(id, def) { /* legacy - niet meer gebruikt */ }
 
 async function graphPost(url, body) {
+  if (!token && window._portalToken) token = window._portalToken;
   const r=await fetch(`https://graph.microsoft.com/v1.0${url}`,{method:'POST',headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(body)});
   if(!r.ok){const e=await r.json();throw new Error(e.error?.message||r.status);}
   return r.json();
 }
 
 async function graphGet(url) {
+  if (!token && window._portalToken) token = window._portalToken;
   const r=await fetch(`https://graph.microsoft.com/v1.0${url}`,{headers:{'Authorization':`Bearer ${token}`}});
   if(!r.ok) throw new Error(r.status);
   return r.json();
