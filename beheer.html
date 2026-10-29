@@ -634,9 +634,9 @@ window.aoItems = [];
 var aoItems = window.aoItems;
 async function laadAO() {
   const items = await laadLijst('ao','veiligheid');
-  window.aoItems = items.filter(i=>i.TypeMelding==='Arbeidsongeval'||!i.TypeMelding);
+  window.aoItems = items.filter(i=>i.TypeMelding==='AO'||i.TypeMelding==='Arbeidsongeval'||!i.TypeMelding);
   var ao = window.aoItems;
-  var ao = items.filter(i=>i.TypeMelding==='Arbeidsongeval'||!i.TypeMelding);
+  var ao = items.filter(i=>i.TypeMelding==='AO'||i.TypeMelding==='Arbeidsongeval'||!i.TypeMelding);
   const kanAgodi = ['admin','staf'].includes(huidigeBeheerder?.rol);
   document.getElementById('ao-tabel').innerHTML = ao.map((i,idx)=>`<tr onclick="openDossier(ao[${idx}],'AO')" style="cursor:pointer">
     <td class="cl">${ref('AO',idx+1)}</td><td>${i.Naam||'—'}</td><td>${i.Letsel||'—'}</td>
@@ -656,7 +656,7 @@ window.ehboItems = [];
 var ehboItems = window.ehboItems;
 async function laadEHBO() {
   const items = await laadLijst('ehbo','veiligheid');
-  ehboItems = items.filter(i=>i.TypeMelding==='EHBO');
+  ehboItems = items.filter(i=>i.TypeMelding==='EH'||i.TypeMelding==='EHBO');
   const ehbo = ehboItems;
   document.getElementById('ehbo-tabel').innerHTML = ehbo.map((i,idx)=>`<tr>
     <td class="cl">${ref('EH',idx+1)}</td><td>${i.Naam||'—'}</td><td>${i.Functie||'—'}</td>
@@ -666,7 +666,7 @@ window.loItems = [];
 var loItems = window.loItems;
 async function laadLO() {
   const items = await laadLijst('lo','veiligheid');
-  loItems = items.filter(i=>i.TypeMelding==='Leerlingongeval');
+  loItems = items.filter(i=>i.TypeMelding==='LO'||i.TypeMelding==='Leerlingongeval');
   const lo = loItems;
   const kanVerzeker = ['admin','staf','secretariaat'].includes(huidigeBeheerder?.rol);
   document.getElementById('lo-tabel').innerHTML = lo.map((i,idx)=>`<tr onclick="openDossier(lo[${idx}],'LO')" style="cursor:pointer">
@@ -680,7 +680,7 @@ window.riItems = [];
 var riItems = window.riItems;
 async function laadRisico() {
   const items = await laadLijst('risico','veiligheid');
-  riItems = items.filter(i=>i.TypeMelding==='Risico-melding');
+  riItems = items.filter(i=>i.TypeMelding==='RI'||i.TypeMelding==='Risico-melding');
   const ri = riItems;
   document.getElementById('ri-tabel').innerHTML = ri.map((i,idx)=>`<tr>
     <td class="cl">${ref('RI',idx+1)}</td><td>${i.Omschrijving?.substring(0,30)||'—'}</td>
