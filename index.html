@@ -521,7 +521,18 @@ async function login() {
       initApp({ username: window._portalEmail || '', name: window._portalEmail || '' });
       return;
     }
-    await new Promise(r => setTimeout(r, 2000));
+    // Vraag portaal om token opnieuw te sturen (in geval iframe te laat klaar was)
+    window.parent.postMessage({ type: 'APP_READY' }, 'https://lon-ka.github.io');
+    await new Promise(r => setTimeout(r, 3000));
+    if (window._portalToken) {
+      token = window._portalToken;
+      window._appBooted = true;
+      initApp({ username: window._portalEmail || '', name: window._portalEmail || '' });
+      return;
+    }
+    // Tweede poging: nog eens vragen en wachten
+    window.parent.postMessage({ type: 'APP_READY' }, 'https://lon-ka.github.io');
+    await new Promise(r => setTimeout(r, 3000));
     if (window._portalToken) {
       token = window._portalToken;
       window._appBooted = true;
@@ -874,15 +885,17 @@ async function laadIncidenten() {
 window.addEventListener('load', async () => {
   await msalClient.initialize();
   const resp = await msalClient.handleRedirectPromise();
-  if (resp) { token = resp.accessToken; initApp(resp.account); }
-  else {
-    const accs = msalClient.getAllAccounts();
-    if (accs.length) {
-      try {
-        const t = await msalClient.acquireTokenSilent({ scopes:['Sites.ReadWrite.All','Mail.Send'], account:accs[0] });
-        token = t.accessToken; initApp(accs[0]);
-      } catch(e) {}
-    }
+  if (resp) { token = resp.accessToken; initApp(resp.account); return; }
+  const accs = msalClient.getAllAccounts();
+  if (accs.length) {
+    try {
+      const t = await msalClient.acquireTokenSilent({ scopes:['Sites.ReadWrite.All','Mail.Send'], account:accs[0] });
+      token = t.accessToken; initApp(accs[0]); return;
+    } catch(e) {}
+  }
+  // In iframe zonder MSAL-account: start login() om op portal token te wachten
+  if (window.self !== window.top && !window._appBooted) {
+    login();
   }
 });
 
