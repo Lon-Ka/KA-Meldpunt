@@ -225,7 +225,7 @@ window.addEventListener('message', function(event) {
 <div class="main">
   <div class="topbar">
     <div class="tb-l"><span class="tb-t" id="tb-t">Snelle aangifte</span><span class="badge b-blue" id="tb-b">melding</span></div>
-    <div style="display:flex;gap:7px;align-items:center"><button onclick="openHelp()" style="background:rgba(255,255,255,.15);border:none;border-radius:8px;color:white;width:34px;height:34px;cursor:pointer;font-size:17px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">&#63;</button><button class="btn btn-sm btn-p" onclick="show('aangifte')">+ Nieuwe melding</button></div>
+    <div style="display:flex;gap:7px;align-items:center"><button id="helpBtn" onclick="openHelp()" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--muted);width:34px;height:34px;cursor:pointer;font-size:17px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0" title="Help">&#63;</button><button class="btn btn-sm btn-p" onclick="show('aangifte')">+ Nieuwe melding</button></div>
   </div>
   <div class="content">
 
@@ -545,13 +545,21 @@ async function login() {
 }
 
 function initApp(acc) {
+  if (window._appInitialized) return; // voorkom dubbele initialisatie
+  window._appInitialized = true;
   huidigUser = acc;
   document.getElementById('login-wrap').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
   const avTxt = (acc.name||acc.username||'?').split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();
   document.getElementById('i-av').textContent = avTxt;
   document.getElementById('i-naam').textContent = acc.name || acc.username;
+  // Zorg dat dropdown en tekst overeenkomen met de huidige school
+  const sel = document.getElementById('i-school-sel');
+  if (sel) sel.value = huidigSchool;
   document.getElementById('i-school').textContent = schoolNaam(huidigSchool);
+  // Synchroniseer school-form dropdown
+  const sf = document.getElementById('school-form');
+  if (sf) sf.value = huidigSchool;
   // Stel datum in voor escalatietijdstip
   const et = document.getElementById('es-t');
   if (et) et.value = new Date().toTimeString().slice(0,5);
@@ -561,7 +569,13 @@ function initApp(acc) {
 }
 
 function schoolNaam(s) { const x=CFG.scholen.find(c=>c.sleutel===s); return x?x.naam:s; }
-function changeSchool(s) { huidigSchool=s; document.getElementById('i-school').textContent=schoolNaam(s); }
+function changeSchool(s) {
+  huidigSchool=s;
+  document.getElementById('i-school').textContent=schoolNaam(s);
+  // Synchroniseer ook het school-form dropdown in het aangifte-formulier
+  const sf=document.getElementById('school-form');
+  if(sf) sf.value=s;
+}
 
 function show(s) {
   document.querySelectorAll('.screen').forEach(el=>el.classList.remove('active'));
@@ -780,24 +794,24 @@ async function doSubmit(prefix, pijler) {
   // 2b. E-mail naar directie (niet bij welzijn of risico)
   if (directieEmail && prefix !== 'RI' && prefix !== 'WE') {
     try {
-      var dBody = 'Nieuwe melding ingediend via LON-Meldpunt.\n\nReferentie: ' + ref + '\nType: ' + prefix + '\nSchool: ' + schoolNaam(school) + '\nDatum: ' + now.toLocaleDateString('nl-BE') + '\nIngediend door: ' + ((huidigUser && huidigUser.name) || '—') + '\n\nBeheerspaneel: https://lon-ka.github.io/LON-Meldpunt-2026/beheer.html\n(Kopieer en plak de URL indien de link niet werkt.)';
-      await graphPost('/me/sendMail', { message:{ subject:'[LON-Meldpunt] Nieuwe melding: ' + prefix + ' — ' + schoolNaam(school), body:{contentType:'Text',content:dBody}, toRecipients:[{emailAddress:{address:directieEmail}}] }, saveToSentItems:false });
+      var dBody = 'Nieuwe melding ingediend via KA-Meldpunt.\n\nReferentie: ' + ref + '\nType: ' + prefix + '\nSchool: ' + schoolNaam(school) + '\nDatum: ' + now.toLocaleDateString('nl-BE') + '\nIngediend door: ' + ((huidigUser && huidigUser.name) || '—') + '\n\nBeheerspaneel: https://lon-ka.github.io/KA-Meldpunt/beheer.html\n(Kopieer en plak de URL indien de link niet werkt.)';
+      await graphPost('/me/sendMail', { message:{ subject:'[KA-Meldpunt] Nieuwe melding: ' + prefix + ' — ' + schoolNaam(school), body:{contentType:'Text',content:dBody}, toRecipients:[{emailAddress:{address:directieEmail}}] }, saveToSentItems:false });
     } catch(e) {}
   }
 
   // 3. CC naar Rita (niet bij welzijn of risico)
   if (prefix !== 'RI' && prefix !== 'WE') {
     try {
-      var rBody = 'CC melding via LON-Meldpunt.\n\nReferentie: ' + ref + '\nType: ' + prefix + '\nSchool: ' + schoolNaam(school) + '\nIngediend door: ' + ((huidigUser && huidigUser.name) || '—') + '\n\nBeheerspaneel: https://lon-ka.github.io/LON-Meldpunt-2026/beheer.html';
-      await graphPost('/me/sendMail', { message:{ subject:'[LON-Meldpunt] CC: ' + prefix + ' — ' + schoolNaam(school), body:{contentType:'Text',content:rBody}, toRecipients:[{emailAddress:{address:'secretariaatlonka@centrumschool.londerzeel.be'}}] }, saveToSentItems:false });
+      var rBody = 'CC melding via KA-Meldpunt.\n\nReferentie: ' + ref + '\nType: ' + prefix + '\nSchool: ' + schoolNaam(school) + '\nIngediend door: ' + ((huidigUser && huidigUser.name) || '—') + '\n\nBeheerspaneel: https://lon-ka.github.io/KA-Meldpunt/beheer.html';
+      await graphPost('/me/sendMail', { message:{ subject:'[KA-Meldpunt] CC: ' + prefix + ' — ' + schoolNaam(school), body:{contentType:'Text',content:rBody}, toRecipients:[{emailAddress:{address:'secretariaatlonka@centrumschool.londerzeel.be'}}] }, saveToSentItems:false });
     } catch(e) {}
   }
 
   // 4. Bevestigingsmail naar melder (niet bij welzijn)
   if (huidigUser && huidigUser.username && prefix !== 'WE') {
     try {
-      var bBody = 'Beste ' + (huidigUser.name || '') + ',\n\nJe melding werd succesvol ingediend.\n\nReferentie: ' + ref + '\nType: ' + prefix + '\nSchool: ' + schoolNaam(school) + '\nDatum: ' + now.toLocaleDateString('nl-BE') + '\n\n' + (MSGS[prefix] || '') + '\n\nMet vriendelijke groeten,\nHet LON-Meldpunt-systeem';
-      await graphPost('/me/sendMail', { message:{ subject:'[LON-Meldpunt] Bevestiging melding ' + ref, body:{contentType:'Text',content:bBody}, toRecipients:[{emailAddress:{address:huidigUser.username}}] }, saveToSentItems:false });
+      var bBody = 'Beste ' + (huidigUser.name || '') + ',\n\nJe melding werd succesvol ingediend.\n\nReferentie: ' + ref + '\nType: ' + prefix + '\nSchool: ' + schoolNaam(school) + '\nDatum: ' + now.toLocaleDateString('nl-BE') + '\n\n' + (MSGS[prefix] || '') + '\n\nMet vriendelijke groeten,\nHet KA-Meldpunt-systeem';
+      await graphPost('/me/sendMail', { message:{ subject:'[KA-Meldpunt] Bevestiging melding ' + ref, body:{contentType:'Text',content:bBody}, toRecipients:[{emailAddress:{address:huidigUser.username}}] }, saveToSentItems:false });
     } catch(e) {}
   }
 
